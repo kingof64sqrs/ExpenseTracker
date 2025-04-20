@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary-50: 239 246 255;
+    --color-primary-100: 219 234 254;
+    --color-primary-200: 191 219 254;
+    --color-primary-300: 147 197 253;
+    --color-primary-400: 96 165 250;
+    --color-primary-500: 59 130 246;
+    --color-primary-600: 37 99 235;
+    --color-primary-700: 29 78 216;
+    --color-primary-800: 30 64 175;
+    --color-primary-900: 30 58 138;
+    --color-primary-950: 23 37 84;
+    
+    --color-accent-50: 240 253 250;
+    --color-accent-100: 204 251 241;
+    --color-accent-200: 153 246 228;
+    --color-accent-300: 94 234 212;
+    --color-accent-400: 45 212 191;
+    --color-accent-500: 20 184 166;
+    --color-accent-600: 13 148 136;
+    --color-accent-700: 15 118 110;
+    --color-accent-800: 17 94 89;
+    --color-accent-900: 19 78 74;
+    --color-accent-950: 4 47 46;
+    
+    --color-success-50: 240 253 244;
+    --color-success-100: 220 252 231;
+    --color-success-200: 187 247 208;
+    --color-success-300: 134 239 172;
+    --color-success-400: 74 222 128;
+    --color-success-500: 34 197 94;
+    --color-success-600: 22 163 74;
+    --color-success-700: 21 128 61;
+    --color-success-800: 22 101 52;
+    --color-success-900: 20 83 45;
+    --color-success-950: 5 46 22;
+    
+    --color-warning-50: 255 251 235;
+    --color-warning-100: 254 243 199;
+    --color-warning-200: 253 230 138;
+    --color-warning-300: 252 211 77;
+    --color-warning-400: 251 191 36;
+    --color-warning-500: 245 158 11;
+    --color-warning-600: 217 119 6;
+    --color-warning-700: 180 83 9;
+    --color-warning-800: 146 64 14;
+    --color-warning-900: 120 53 15;
+    --color-warning-950: 69 26 3;
+    
+    --color-error-50: 254 242 242;
+    --color-error-100: 254 226 226;
+    --color-error-200: 254 202 202;
+    --color-error-300: 252 165 165;
+    --color-error-400: 248 113 113;
+    --color-error-500: 239 68 68;
+    --color-error-600: 220 38 38;
+    --color-error-700: 185 28 28;
+    --color-error-800: 153 27 27;
+    --color-error-900: 127 29 29;
+    --color-error-950: 69 10 10;
+  }
+  
+  .dark {
+    --color-primary-950: 239 246 255;
+    --color-primary-900: 219 234 254;
+    --color-primary-800: 191 219 254;
+    --color-primary-700: 147 197 253;
+    --color-primary-600: 96 165 250;
+    --color-primary-500: 59 130 246;
+    --color-primary-400: 37 99 235;
+    --color-primary-300: 29 78 216;
+    --color-primary-200: 30 64 175;
+    --color-primary-100: 30 58 138;
+    --color-primary-50: 23 37 84;
+    
+    --color-bg-primary: 15 23 42;
+    --color-bg-secondary: 30 41 59;
+    --color-text-primary: 248 250 252;
+    --color-text-secondary: 226 232 240;
+  }
+  
+  body {
+    @apply font-sans antialiased text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-900 transition-colors duration-300;
+  }
+
+  .glass {
+    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border border-gray-200 dark:border-gray-700;
+  }
+  
+  .animation-hover {
+    @apply transition-all duration-300 ease-in-out;
+  }
+  
+  input, select, textarea {
+    @apply bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-400 transition-all duration-200;
+  }
+  
+  button {
+    @apply transition-all duration-200;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50;
+  }
+  
+  .btn-primary {
+    @apply btn bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-accent-600 hover:bg-accent-700 text-white focus:ring-accent-500;
+  }
+  
+  .btn-success {
+    @apply btn bg-success-600 hover:bg-success-700 text-white focus:ring-success-500;
+  }
+  
+  .btn-warning {
+    @apply btn bg-warning-600 hover:bg-warning-700 text-white focus:ring-warning-500;
+  }
+  
+  .btn-error {
+    @apply btn bg-error-600 hover:bg-error-700 text-white focus:ring-error-500;
+  }
+  
+  .btn-outline {
+    @apply btn border-2 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800;
+  }
+  
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-100 dark:border-gray-700 overflow-hidden transition-all duration-300;
+  }
+  
+  .input-group {
+    @apply flex flex-col space-y-1 mb-4;
+  }
+  
+  .input-label {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-300;
+  }
+  
+  .badge {
+    @apply px-2 py-1 text-xs font-medium rounded-full;
+  }
+  
+  .badge-primary {
+    @apply badge bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-100;
+  }
+  
+  .badge-success {
+    @apply badge bg-success-100 dark:bg-success-900 text-success-800 dark:text-success-100;
+  }
+  
+  .badge-warning {
+    @apply badge bg-warning-100 dark:bg-warning-900 text-warning-800 dark:text-warning-100;
+  }
+  
+  .badge-error {
+    @apply badge bg-error-100 dark:bg-error-900 text-error-800 dark:text-error-100;
+  }
+}
+
+/* Scrollbar styles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-gray-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500 dark:bg-gray-500;
+}
