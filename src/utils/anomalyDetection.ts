@@ -8,6 +8,7 @@ export interface AnomalyAlert {
   severity: 'low' | 'medium' | 'high';
   amount: number;
   normalAmount: number;
+  anomalyType?: 'amount' | 'timing' | 'frequency' | 'budget_threshold' | 'budget_depletion' | 'rapid_succession' | 'combined' | null;
 }
 
 /**

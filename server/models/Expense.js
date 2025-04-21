@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+//updated
 const expenseSchema = new mongoose.Schema({
   userId: { type: String, required: true }, // Change ObjectId to String
   amount: { type: Number, required: true },
@@ -12,7 +12,11 @@ const expenseSchema = new mongoose.Schema({
   anomalyReason: { type: String, default: null },
   anomalyConfidence: { type: Number, default: 0 },
   // Additional fields for advanced anomaly detection
-  anomalyType: { type: String, enum: ['amount', 'timing', 'frequency', 'combined', null], default: null },
+  anomalyType: { 
+    type: String, 
+    enum: ['amount', 'timing', 'frequency', 'budget_threshold', 'budget_depletion', 'rapid_succession', 'combined', null], 
+    default: null 
+  },
   lastAnalyzed: { type: Date, default: null },
 }, { timestamps: true });
 

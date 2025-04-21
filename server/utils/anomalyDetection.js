@@ -1,4 +1,5 @@
 const Expense = require('../models/Expense');
+const Budget = require('../models/Budget');
 
 /**
  * Statistical anomaly detection based on Z-score
@@ -221,49 +222,283 @@ exports.detectFrequencyAnomaly = async (userId, category) => {
 };
 
 /**
- * Comprehensive anomaly detection combining multiple techniques
- * @param {Object} expense - The expense object to analyze
- * @returns {Object} - Comprehensive anomaly detection result
+ * Detect budget threshold anomalies (spending too much of budget at once)
+ * @param {string} userId - The user ID
+ * @param {string} category - The expense category
+ * @param {Number} amount - The expense amount
+ * @returns {Object} - Anomaly detection result
  */
-exports.detectAnomalies = async (expense) => {
+exports.detectBudgetThresholdAnomaly = async (userId, category, amount) => {
   try {
-    const { userId, category, amount, date } = expense;
+    // Get the user's budget for this category
+    const budget = await Budget.findOne({ userId, category });
     
-    // Run all detection algorithms
-    const [amountAnomaly, timingAnomaly, frequencyAnomaly] = await Promise.all([
-      this.detectCategoryAnomaly(userId, category, amount),
-      this.detectTimingAnomaly(userId, category, date),
-      this.detectFrequencyAnomaly(userId, category)
-    ]);
+    if (!budget) {
+      return {
+        isAnomaly: false,
+        reason: 'No budget set for this category',
+        confidence: 0
+      };
+    }
     
-    // Combine results with weighted approach
-    const isAnomaly = amountAnomaly.isAnomaly || 
-                     (timingAnomaly.isAnomaly && timingAnomaly.confidence > 0.7) || 
-                     (frequencyAnomaly.isAnomaly && frequencyAnomaly.confidence > 0.8);
+    // Calculate what percentage of the budget this expense represents
+    const percentOfBudget = (amount / budget.amount) * 100;
     
-    // Determine primary reason
+    // Define thresholds for anomaly detection
+    const severeThreshold = 50; // 50% of budget in one expense
+    const moderateThreshold = 30; // 30% of budget in one expense
+    
+    let isAnomaly = false;
     let reason = null;
     let confidence = 0;
     
-    if (amountAnomaly.isAnomaly) {
-      reason = amountAnomaly.reason;
-      confidence = amountAnomaly.confidence;
-    } else if (timingAnomaly.isAnomaly && timingAnomaly.confidence > 0.7) {
-      reason = timingAnomaly.reason;
-      confidence = timingAnomaly.confidence;
-    } else if (frequencyAnomaly.isAnomaly && frequencyAnomaly.confidence > 0.8) {
-      reason = frequencyAnomaly.reason;
-      confidence = frequencyAnomaly.confidence;
+    if (percentOfBudget >= severeThreshold) {
+      isAnomaly = true;
+      reason = `This expense of $${amount.toFixed(2)} is ${percentOfBudget.toFixed(1)}% of your ${category} budget ($${budget.amount.toFixed(2)})`;
+      confidence = 0.9;
+    } else if (percentOfBudget >= moderateThreshold) {
+      isAnomaly = true;
+      reason = `This expense of $${amount.toFixed(2)} is ${percentOfBudget.toFixed(1)}% of your ${category} budget ($${budget.amount.toFixed(2)})`;
+      confidence = 0.7;
     }
     
     return {
       isAnomaly,
       reason,
       confidence,
+      percentOfBudget,
+      budgetAmount: budget.amount
+    };
+  } catch (error) {
+    console.error('Error in detectBudgetThresholdAnomaly:', error);
+    throw error;
+  }
+};
+
+/**
+ * Detect rapid succession anomalies (multiple expenses in short time)
+ * @param {string} userId - The user ID
+ * @param {string} category - The expense category
+ * @param {Date} date - The expense date
+ * @returns {Object} - Anomaly detection result
+ */
+exports.detectRapidSuccessionAnomaly = async (userId, category, date) => {
+  try {
+    // Check for expenses in the last 24 hours in this category
+    const oneDayAgo = new Date(new Date(date).getTime() - 24 * 60 * 60 * 1000);
+    
+    const recentExpenses = await Expense.find({
+      userId,
+      category,
+      date: { 
+        $gte: oneDayAgo.toISOString().slice(0, 10),
+        $lte: new Date(date).toISOString().slice(0, 10)
+      }
+    }).sort({ date: -1 });
+    
+    // If there are 3 or more expenses in the same category within 24 hours, flag as anomaly
+    if (recentExpenses.length >= 3) {
+      const totalAmount = recentExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+      
+      return {
+        isAnomaly: true,
+        reason: `Unusual pattern: ${recentExpenses.length} ${category} expenses within 24 hours, totaling $${totalAmount.toFixed(2)}`,
+        confidence: Math.min(0.6 + (recentExpenses.length - 3) * 0.1, 0.9), // Higher confidence with more expenses
+        recentExpensesCount: recentExpenses.length,
+        totalAmount
+      };
+    }
+    
+    return {
+      isAnomaly: false,
+      reason: null,
+      confidence: 0
+    };
+  } catch (error) {
+    console.error('Error in detectRapidSuccessionAnomaly:', error);
+    throw error;
+  }
+};
+
+/**
+ * Detect monthly budget depletion anomalies
+ * @param {string} userId - The user ID
+ * @param {string} category - The expense category
+ * @param {Number} amount - The expense amount
+ * @returns {Object} - Anomaly detection result
+ */
+exports.detectBudgetDepletionAnomaly = async (userId, category, amount) => {
+  try {
+    // Get the budget for this category
+    const budget = await Budget.findOne({ userId, category });
+    
+    if (!budget) {
+      return {
+        isAnomaly: false,
+        reason: 'No budget set for this category',
+        confidence: 0
+      };
+    }
+    
+    // Get current month's expenses
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const expenses = await Expense.find({
+      userId,
+      category,
+      date: { $gte: startOfMonth.toISOString().slice(0, 10) }
+    });
+    
+    // Calculate total spent this month (including current expense)
+    const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0) + amount;
+    
+    // Calculate days passed and days in month
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysPassed = today.getDate();
+    const monthProgress = daysPassed / daysInMonth;
+    
+    // If we've spent more than 90% of the budget before 75% of the month has passed
+    if (totalSpent >= budget.amount * 0.9 && monthProgress < 0.75) {
+      return {
+        isAnomaly: true,
+        reason: `This expense will deplete ${(totalSpent / budget.amount * 100).toFixed(1)}% of your monthly ${category} budget with ${Math.round((1 - monthProgress) * 100)}% of the month remaining`,
+        confidence: 0.8,
+        totalSpent,
+        budgetAmount: budget.amount,
+        percentSpent: (totalSpent / budget.amount) * 100,
+        monthProgress: monthProgress * 100
+      };
+    }
+    
+    return {
+      isAnomaly: false,
+      reason: null,
+      confidence: 0
+    };
+  } catch (error) {
+    console.error('Error in detectBudgetDepletionAnomaly:', error);
+    throw error;
+  }
+};
+
+/**
+ * Comprehensive anomaly detection combining multiple techniques
+ * @param {Object} expense - The expense object to analyze
+ * @returns {Object} - Comprehensive anomaly detection result
+ */
+exports.detectAnomalies = async (expense) => {
+  try {
+    // Validate input
+    if (!expense || typeof expense !== 'object') {
+      console.error('Invalid expense object provided to detectAnomalies:', expense);
+      return {
+        isAnomaly: false,
+        reason: null,
+        confidence: 0,
+        anomalyType: null,
+        details: {}
+      };
+    }
+
+    const { userId, category, amount, date } = expense;
+    
+    // Validate required fields
+    if (!userId || !category || amount === undefined || !date) {
+      console.error('Missing required fields in expense object:', { userId, category, amount, date });
+      return {
+        isAnomaly: false,
+        reason: null,
+        confidence: 0,
+        anomalyType: null,
+        details: {}
+      };
+    }
+
+    // Ensure amount is a number
+    const numericAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (isNaN(numericAmount)) {
+      console.error('Invalid amount value in expense object:', amount);
+      return {
+        isAnomaly: false,
+        reason: null,
+        confidence: 0,
+        anomalyType: null,
+        details: {}
+      };
+    }
+    
+    // Run all detection algorithms
+    const [
+      amountAnomaly, 
+      timingAnomaly, 
+      frequencyAnomaly,
+      budgetThresholdAnomaly,
+      rapidSuccessionAnomaly,
+      budgetDepletionAnomaly
+    ] = await Promise.all([
+      this.detectCategoryAnomaly(userId, category, numericAmount),
+      this.detectTimingAnomaly(userId, category, date),
+      this.detectFrequencyAnomaly(userId, category),
+      this.detectBudgetThresholdAnomaly(userId, category, numericAmount),
+      this.detectRapidSuccessionAnomaly(userId, category, date),
+      this.detectBudgetDepletionAnomaly(userId, category, numericAmount)
+    ]);
+    
+    // Combine results with weighted approach
+    const isAnomaly = amountAnomaly.isAnomaly || 
+                     (timingAnomaly.isAnomaly && timingAnomaly.confidence > 0.7) || 
+                     (frequencyAnomaly.isAnomaly && frequencyAnomaly.confidence > 0.8) ||
+                     budgetThresholdAnomaly.isAnomaly ||
+                     rapidSuccessionAnomaly.isAnomaly ||
+                     budgetDepletionAnomaly.isAnomaly;
+    
+    // Determine primary reason
+    let reason = null;
+    let confidence = 0;
+    let anomalyType = null;
+    
+    // Prioritize budget threshold anomalies (spending too much at once)
+    if (budgetThresholdAnomaly.isAnomaly) {
+      reason = budgetThresholdAnomaly.reason;
+      confidence = budgetThresholdAnomaly.confidence;
+      anomalyType = 'budget_threshold';
+    } else if (budgetDepletionAnomaly.isAnomaly) {
+      reason = budgetDepletionAnomaly.reason;
+      confidence = budgetDepletionAnomaly.confidence;
+      anomalyType = 'budget_depletion';
+    } else if (amountAnomaly.isAnomaly) {
+      reason = amountAnomaly.reason;
+      confidence = amountAnomaly.confidence;
+      anomalyType = 'amount';
+    } else if (rapidSuccessionAnomaly.isAnomaly) {
+      reason = rapidSuccessionAnomaly.reason;
+      confidence = rapidSuccessionAnomaly.confidence;
+      anomalyType = 'rapid_succession';
+    } else if (timingAnomaly.isAnomaly && timingAnomaly.confidence > 0.7) {
+      reason = timingAnomaly.reason;
+      confidence = timingAnomaly.confidence;
+      anomalyType = 'timing';
+    } else if (frequencyAnomaly.isAnomaly && frequencyAnomaly.confidence > 0.8) {
+      reason = frequencyAnomaly.reason;
+      confidence = frequencyAnomaly.confidence;
+      anomalyType = 'frequency';
+    }
+    
+    return {
+      isAnomaly,
+      reason,
+      confidence,
+      anomalyType,
       details: {
         amountAnomaly,
         timingAnomaly,
-        frequencyAnomaly
+        frequencyAnomaly,
+        budgetThresholdAnomaly,
+        rapidSuccessionAnomaly,
+        budgetDepletionAnomaly
       }
     };
   } catch (error) {
@@ -289,6 +524,7 @@ exports.batchDetectAnomalies = async (expenses) => {
         isAnomaly: anomalyResult.isAnomaly,
         anomalyReason: anomalyResult.reason,
         anomalyConfidence: anomalyResult.confidence,
+        anomalyType: anomalyResult.anomalyType,
         anomalyDetails: anomalyResult.details
       });
     }

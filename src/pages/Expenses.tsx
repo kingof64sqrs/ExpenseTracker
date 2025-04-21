@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
 import { AnomalyAlert } from '../utils/anomalyDetection';
-import { deleteExpense, updateExpense, Expense, fetchExpenses } from '../store/expenseSlice';
+import { deleteExpense, updateExpense, addExpense, Expense, fetchExpenses } from '../store/expenseSlice';
+import { AppDispatch } from '../store';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +17,7 @@ const ExpenseModal: React.FC<{
   expense?: Expense;
   userId: string;
 }> = ({ isOpen, onClose, expense, userId }) => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const initialState = expense || {
     userId,
     amount: 0,
@@ -41,12 +42,16 @@ const ExpenseModal: React.FC<{
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Ensure amount is a number
+      const expenseData = {
+        ...formData,
+        amount: parseFloat(formData.amount.toString()),
+        userId: user?.id
+      };
+
       if (expense?._id) {
         // Update existing expense
-        const response = await axios.put(`/api/expenses/${expense._id}`, {
-          ...formData,
-          userId: user?.id
-        });
+        const response = await axios.put(`/api/expenses/${expense._id}`, expenseData);
         dispatch(updateExpense(response.data));
         // Fetch all expenses after update
         if (user?.id) {
@@ -54,10 +59,9 @@ const ExpenseModal: React.FC<{
         }
       } else {
         // Add new expense
-        const response = await axios.post('/api/expenses', {
-          ...formData,
-          userId: user?.id
-        });
+        const response = await axios.post('/api/expenses', expenseData);
+        // Dispatch the addExpense action with the response data
+        dispatch(addExpense(response.data));
         if (user?.id) {
           dispatch(fetchExpenses(user.id));
         }
@@ -266,7 +270,7 @@ const ExpenseItem: React.FC<{
                 {showAsAnomaly && (
                   <div className="ml-2 flex items-center">
                     <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-error-100 dark:bg-error-800 text-error-800 dark:text-error-200">
-                      <AlertTriangle className="h-3 w-3 inline mr-1" />
+                      <AlertTriangle className="h-3 w-3 mr-1" />
                       Anomaly
                     </span>
                   </div>
@@ -360,7 +364,7 @@ function getCategoryIcon(category: string) {
 }
 
 const Expenses: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const { expenses, anomalies } = useSelector((state: RootState) => state.expenses);
   const { user } = useSelector((state: RootState) => state.auth);
 
@@ -507,7 +511,7 @@ const Expenses: React.FC = () => {
           </p>
           {anomalyCount > 0 && (
             <div className="flex items-center mt-2">
-              <span className="px-2 py-1 text-xs font-medium bg-error-100 dark:bg-error-800 text-error-800 dark:text-error-200 rounded-full flex items-center">
+              <span className="px-2 py-0.5 text-xs font-medium bg-error-100 dark:bg-error-800 text-error-800 dark:text-error-200 rounded-full flex items-center">
                 <AlertTriangle className="h-3 w-3 mr-1" />
                 {anomalyCount} {anomalyCount === 1 ? 'anomaly' : 'anomalies'} detected
               </span>

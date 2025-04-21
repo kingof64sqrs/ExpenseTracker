@@ -17,6 +17,8 @@ export interface Expense {
   isRecurring: boolean;
   isAnomaly: boolean;
   anomalyReason: string | null;
+  anomalyConfidence?: number;
+  anomalyType?: 'amount' | 'timing' | 'frequency' | 'budget_threshold' | 'budget_depletion' | 'rapid_succession' | 'combined' | null;
 }
 
 // ✅ State Interface
@@ -276,33 +278,3 @@ export const {
 
 // ✅ Reducer
 export default expenseSlice.reducer;
-
-const handleDeleteExpense = async (id: string) => {
-  try {
-    // Validate ID before attempting deletion
-    if (!id || typeof id !== 'string' || id.length !== 24) {
-      throw new Error('Invalid expense ID format');
-    }
-
-    if (window.confirm('Are you sure you want to delete this expense?')) {
-      const result = await dispatch(deleteExpense(id)).unwrap();
-      
-      if (result) {
-        // Show success notification
-        alert('Expense deleted successfully');
-        
-        // Refresh expenses list
-        if (user?.id) {
-          await dispatch(fetchExpenses(user.id));
-        }
-      }
-    }
-  } catch (error: any) {
-    console.error('Failed to delete expense:', error);
-    // Show user-friendly error message
-    alert(
-      error.message || 
-      (typeof error === 'string' ? error : 'Failed to delete expense. Please try again.')
-    );
-  }
-};

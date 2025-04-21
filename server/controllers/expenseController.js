@@ -53,17 +53,38 @@ async function detectAnomalies(newExpense) {
 // Enhanced createExpense with AI-powered anomaly detection
 exports.createExpense = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, amount, category, description, date, paymentMethod } = req.body;
     
-    // Validate userId
+    // Validate required fields
     if (!userId) {
       return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    if (!amount || isNaN(parseFloat(amount))) {
+      return res.status(400).json({ message: 'Valid amount is required' });
+    }
+    
+    if (!category) {
+      return res.status(400).json({ message: 'Category is required' });
+    }
+    
+    if (!description) {
+      return res.status(400).json({ message: 'Description is required' });
+    }
+    
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required' });
+    }
+    
+    if (!paymentMethod) {
+      return res.status(400).json({ message: 'Payment method is required' });
     }
 
     // Create expense object but don't save yet
     const expenseData = {
       ...req.body,
-      userId
+      userId,
+      amount: parseFloat(req.body.amount) // Ensure amount is a number
     };
 
     // Check if this expense is an anomaly using advanced detection
@@ -73,6 +94,7 @@ exports.createExpense = async (req, res) => {
     expenseData.isAnomaly = anomalyResult.isAnomaly;
     expenseData.anomalyReason = anomalyResult.reason;
     expenseData.anomalyConfidence = anomalyResult.confidence;
+    expenseData.anomalyType = anomalyResult.anomalyType;
 
     // Now create and save the expense with anomaly information
     const newExpense = new Expense(expenseData);
@@ -112,7 +134,10 @@ exports.updateExpense = async (req, res) => {
     const { id } = req.params;
     
     // Get the expense data before updating
-    const expenseData = { ...req.body };
+    const expenseData = { 
+      ...req.body,
+      amount: parseFloat(req.body.amount) // Ensure amount is a number
+    };
     
     // Check if this expense is an anomaly using advanced detection
     const anomalyResult = await anomalyDetector.detectAnomalies(expenseData);
@@ -121,6 +146,7 @@ exports.updateExpense = async (req, res) => {
     expenseData.isAnomaly = anomalyResult.isAnomaly;
     expenseData.anomalyReason = anomalyResult.reason;
     expenseData.anomalyConfidence = anomalyResult.confidence;
+    expenseData.anomalyType = anomalyResult.anomalyType;
     
     // Update the expense with anomaly information
     const updated = await Expense.findByIdAndUpdate(id, expenseData, { new: true });
@@ -203,7 +229,8 @@ exports.reanalyzeAnomalies = async (req, res) => {
       return Expense.findByIdAndUpdate(expense._id, {
         isAnomaly: expense.isAnomaly,
         anomalyReason: expense.anomalyReason,
-        anomalyConfidence: expense.anomalyConfidence
+        anomalyConfidence: expense.anomalyConfidence,
+        anomalyType: expense.anomalyType
       });
     });
     
