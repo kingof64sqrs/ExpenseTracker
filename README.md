@@ -32,7 +32,7 @@ DEMO - https://youtu.be/5x4_1oE66OA
 
 1. **Clone and Install Dependencies**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/kingof64sqrs/ExpenseTracker.git
    cd project
    npm install
    ```
