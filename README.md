@@ -7,7 +7,7 @@ DEMO - https://youtu.be/5x4_1oE66OA
 ## AI TOOLS , TECH STACK USED : 
 
 - BOLT
-- CHATGPT
+- CLAUDE 
 - REACT+VITE
 - TAILWIND
 - NODE + EXPRESS
