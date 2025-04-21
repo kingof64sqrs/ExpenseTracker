@@ -4,6 +4,18 @@ A modern expense tracking application with AI-powered budgeting recommendations 
 
 DEMO - https://youtu.be/5x4_1oE66OA
 
+## AI TOOLS , TECH STACK USED : 
+
+- BOLT
+- CHATGPT
+- REACT+VITE
+- TAILWIND
+- NODE + EXPRESS
+- RESTFULAPI
+- JWT
+- PYTHON
+- AZURE APIKEY
+  
 ## Features
 
 - **Smart Expense Management**: Track and categorize expenses with real-time updates
