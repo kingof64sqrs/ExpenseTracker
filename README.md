@@ -2,6 +2,8 @@
 
 A modern expense tracking application with AI-powered budgeting recommendations and anomaly detection.
 
+DEMO - https://youtu.be/5x4_1oE66OA
+
 ## Features
 
 - **Smart Expense Management**: Track and categorize expenses with real-time updates
