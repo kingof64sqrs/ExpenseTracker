@@ -6,7 +6,7 @@ import { AtSign, Lock, TrendingUp } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import ThemeToggle from '../components/common/ThemeToggle';
-import { autoLogin } from '../store/authSlice';
+import { loginSuccess } from '../store/authSlice';
 
 const Login: React.FC = () => {
   const dispatch = useDispatch();
@@ -29,20 +29,36 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
+  
     try {
-      // Simulate login delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+  
+      const data = await res.json();
+  
+      if (!res.ok) {
+        throw new Error(data.message);
+      }
       
-      // For the demo, we'll just use mock login
-      dispatch(autoLogin());
+      // Store the token and user data in Redux
+      dispatch(loginSuccess({
+        user: data.user,
+        token: data.token
+      }));
+      
       navigate('/');
-    } catch (err) {
-      setError('Invalid email or password');
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
+  
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">

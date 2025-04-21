@@ -1,8 +1,10 @@
-import React from 'react';
-import { useSelector } from 'react-redux';
+import React, { useEffect, useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
 import { format, subDays } from 'date-fns';
-import { AlertTriangle, ArrowUpRight, Banknote, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Banknote, TrendingDown, TrendingUp, Wallet, RefreshCw } from 'lucide-react';
+import { getAIRecommendations } from '../api/aiRecommendationService';
+import { setRecommendations } from '../store/budgetSlice';
 import Card from '../components/common/Card';
 import { motion } from 'framer-motion';
 import { Line, Doughnut } from 'react-chartjs-2';
@@ -32,15 +34,81 @@ ChartJS.register(
 );
 
 const Dashboard: React.FC = () => {
+  const dispatch = useDispatch();
   const { expenses } = useSelector((state: RootState) => state.expenses);
-  const { budgets, recommendations, anomalies } = useSelector((state: RootState) => state.budgets);
+  const { budgets, recommendations } = useSelector((state: RootState) => state.budgets);
   const { user } = useSelector((state: RootState) => state.auth);
+  
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  
+  // Count anomalies from the backend data
+  const anomalyCount = expenses.filter(exp => exp.isAnomaly).length;
+  
+  // Fetch AI recommendations from Flask API
+  useEffect(() => {
+    const fetchAIRecommendations = async () => {
+      try {
+        setLoadingRecommendations(true);
+        setAiError(null);
+        
+        // Get recommendations with improved error handling
+        const aiRecommendations = await getAIRecommendations();
+        
+        if (aiRecommendations.length > 0) {
+          dispatch(setRecommendations(aiRecommendations));
+        } else {
+          // If no recommendations were returned but no error was thrown,
+          // we'll set a more specific error message
+          setAiError('No recommendations available from the AI service');
+        }
+      } catch (error) {
+        console.error('Error fetching AI recommendations:', error);
+        setAiError('Failed to connect to the AI recommendation service');
+      } finally {
+        setLoadingRecommendations(false);
+      }
+    };
+    
+    // Initial fetch
+    fetchAIRecommendations();
+    
+    // Refresh recommendations every 30 seconds
+    const intervalId = setInterval(fetchAIRecommendations, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, [dispatch]);
+  
+  // Function to manually refresh recommendations
+  const handleRefreshRecommendations = async () => {
+    try {
+      setLoadingRecommendations(true);
+      setAiError(null);
+      const aiRecommendations = await getAIRecommendations();
+      
+      if (aiRecommendations.length > 0) {
+        dispatch(setRecommendations(aiRecommendations));
+      }
+    } catch (error) {
+      console.error('Error fetching AI recommendations:', error);
+      setAiError('Failed to fetch AI recommendations');
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
   
   // Calculate total spent this month
   const totalSpent = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   
   // Calculate total budget
   const totalBudget = budgets.reduce((sum, budget) => sum + budget.amount, 0);
+  
+  // Calculate savings rate (if budget > 0)
+  const savingsRate = totalBudget > 0 ? Math.max(0, Math.min(100, Math.round(((totalBudget - totalSpent) / totalBudget) * 100))) : 0;
+  
+  // Determine if savings rate has increased or decreased (for demo purposes)
+  // In a real app, this would compare with previous period data
+  const savingsRateChange = Math.round((Math.random() * 10) - 5); // Random number between -5 and 5
   
   // Calculate spending by category for pie chart
   const spendingByCategory = expenses.reduce((acc: Record<string, number>, expense) => {
@@ -57,10 +125,22 @@ const Dashboard: React.FC = () => {
     return format(date, 'MMM dd');
   });
   
-  // Generate spending data for the last 7 days
-  const dailySpending = last7Days.map((day, index) => {
-    // This is just for the demo - normally would filter expenses by date
-    return (Math.random() * 100 + 20).toFixed(2);
+  // Generate spending data for the last 7 days based on actual expenses
+  const dailySpending = last7Days.map((day) => {
+    // Convert day string back to date for comparison
+    const dayDate = new Date(day + ', ' + new Date().getFullYear());
+    const dayStart = new Date(dayDate.setHours(0, 0, 0, 0));
+    const dayEnd = new Date(dayDate.setHours(23, 59, 59, 999));
+    
+    // Filter expenses for this day
+    const dayExpenses = expenses.filter(expense => {
+      const expenseDate = new Date(expense.date);
+      return expenseDate >= dayStart && expenseDate <= dayEnd;
+    });
+    
+    // Sum expenses for this day
+    const dayTotal = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    return dayTotal.toFixed(2);
   });
   
   // Chart data for spending trend
@@ -78,6 +158,9 @@ const Dashboard: React.FC = () => {
     ],
   };
   
+  // Get currency symbol from user settings
+  const currencySymbol = user?.currency || '$';
+  
   // Chart options for spending trend
   const spendingTrendOptions = {
     responsive: true,
@@ -88,7 +171,7 @@ const Dashboard: React.FC = () => {
       tooltip: {
         callbacks: {
           label: function(context: any) {
-            return `$${context.raw}`;
+            return `${currencySymbol}${context.raw}`;
           }
         }
       }
@@ -102,7 +185,7 @@ const Dashboard: React.FC = () => {
         },
         ticks: {
           callback: function(value: any) {
-            return `$${value}`;
+            return `${currencySymbol}${value}`;
           }
         }
       },
@@ -143,7 +226,7 @@ const Dashboard: React.FC = () => {
             const value = context.raw;
             const total = context.chart.data.datasets[0].data.reduce((a: number, b: number) => a + b, 0);
             const percentage = ((value / total) * 100).toFixed(1);
-            return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+            return `${context.label}: ${currencySymbol}${value.toFixed(2)} (${percentage}%)`;
           }
         }
       }
@@ -211,7 +294,7 @@ const Dashboard: React.FC = () => {
                 </h3>
                 <p className="mt-1 text-sm text-warning-600 dark:text-warning-400 flex items-center">
                   <TrendingDown className="w-4 h-4 mr-1" />
-                  <span>12% decrease</span>
+                  <span>{totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0}% used</span>
                 </p>
               </div>
               <div className="p-3 bg-warning-100 dark:bg-warning-900 rounded-full">
@@ -227,11 +310,11 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Savings Rate</p>
                 <h3 className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
-                  28%
+                  {savingsRate}%
                 </h3>
-                <p className="mt-1 text-sm text-success-600 dark:text-success-400 flex items-center">
-                  <ArrowUpRight className="w-4 h-4 mr-1" />
-                  <span>4% increase</span>
+                <p className={`mt-1 text-sm ${savingsRateChange >= 0 ? 'text-success-600 dark:text-success-400' : 'text-error-600 dark:text-error-400'} flex items-center`}>
+                  {savingsRateChange >= 0 ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <TrendingDown className="w-4 h-4 mr-1" />}
+                  <span>{Math.abs(savingsRateChange)}% {savingsRateChange >= 0 ? 'increase' : 'decrease'}</span>
                 </p>
               </div>
               <div className="p-3 bg-success-100 dark:bg-success-900 rounded-full">
@@ -247,11 +330,11 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Anomalies</p>
                 <h3 className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
-                  {anomalies.length}
+                  {anomalyCount}
                 </h3>
                 <p className="mt-1 text-sm text-error-600 dark:text-error-400 flex items-center">
                   <AlertTriangle className="w-4 h-4 mr-1" />
-                  <span>New alerts</span>
+                  <span>{anomalyCount > 0 ? 'Unusual expenses detected' : 'No anomalies detected'}</span>
                 </p>
               </div>
               <div className="p-3 bg-error-100 dark:bg-error-900 rounded-full">
@@ -300,9 +383,40 @@ const Dashboard: React.FC = () => {
           <Card className="p-5">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">AI Budget Recommendations</h3>
-              <span className="badge-primary">AI Powered</span>
+              <div className="flex items-center space-x-2">
+                <span className="badge-primary">AI Powered</span>
+                <button 
+                  onClick={handleRefreshRecommendations} 
+                  className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  disabled={loadingRecommendations}
+                  title="Refresh recommendations"
+                >
+                  <RefreshCw 
+                    className={`h-4 w-4 text-gray-500 dark:text-gray-400 ${loadingRecommendations ? 'animate-spin' : ''}`} 
+                  />
+                </button>
+              </div>
             </div>
-            {recommendations.length > 0 ? (
+            {loadingRecommendations && recommendations.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div className="animate-pulse flex flex-col items-center">
+                  <div className="h-8 w-8 mb-4 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                  <div className="h-4 w-48 mb-2 rounded bg-gray-200 dark:bg-gray-700"></div>
+                  <div className="h-3 w-32 rounded bg-gray-200 dark:bg-gray-700"></div>
+                </div>
+                <p className="mt-4">Loading AI recommendations...</p>
+              </div>
+            ) : aiError ? (
+              <div className="text-center py-8 text-error-500 dark:text-error-400">
+                <p>{aiError}</p>
+                <button 
+                  onClick={handleRefreshRecommendations}
+                  className="mt-4 px-4 py-2 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-100 rounded-lg hover:bg-primary-200 dark:hover:bg-primary-800 transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : recommendations.length > 0 ? (
               <ul className="space-y-3">
                 {recommendations.map((rec) => (
                   <li key={rec.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -352,6 +466,12 @@ const Dashboard: React.FC = () => {
             ) : (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <p>No recommendations available at this time</p>
+                <button 
+                  onClick={handleRefreshRecommendations}
+                  className="mt-4 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Check for Recommendations
+                </button>
               </div>
             )}
           </Card>
@@ -365,31 +485,26 @@ const Dashboard: React.FC = () => {
           <Card className="p-5">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Unusual Spending Alerts</h3>
-              <span className="badge-error">Alerts</span>
+              <span className="px-2 py-1 text-xs font-medium bg-error-100 dark:bg-error-800 text-error-800 dark:text-error-200 rounded-full">
+                {anomalyCount} {anomalyCount === 1 ? 'Alert' : 'Alerts'}
+              </span>
             </div>
-            {anomalies.length > 0 ? (
+            {anomalyCount > 0 ? (
               <ul className="space-y-3">
-                {anomalies.map((anomaly) => (
-                  <li key={anomaly.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border-l-4 border-error-500">
-                    <div className="flex justify-between">
-                      <span className="font-medium">{anomaly.category}</span>
-                      <span className={`text-${anomaly.severity === 'high' ? 'error' : anomaly.severity === 'medium' ? 'warning' : 'gray'}-600 dark:text-${anomaly.severity === 'high' ? 'error' : anomaly.severity === 'medium' ? 'warning' : 'gray'}-400 text-sm font-medium`}>
-                        {anomaly.severity.charAt(0).toUpperCase() + anomaly.severity.slice(1)} severity
+                {expenses.filter(exp => exp.isAnomaly).map((expense) => (
+                  <li key={expense.id} className="p-3 bg-error-50 dark:bg-error-900/20 rounded-lg border border-error-200 dark:border-error-800">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-white">{expense.category}</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{expense.description}</p>
+                        <p className="text-xs text-error-600 dark:text-error-400 mt-1">{expense.anomalyReason}</p>
+                      </div>
+                      <span className="px-2 py-1 text-xs font-medium bg-error-100 dark:bg-error-800 text-error-800 dark:text-error-200 rounded-full">
+                        {user?.currency || '$'}{expense.amount.toFixed(2)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{anomaly.description}</p>
-                    <div className="mt-2 flex justify-between items-center">
-                      <div className="flex items-center space-x-1">
-                        <span className="text-error-600 dark:text-error-400 font-medium">
-                          ${anomaly.amount.toFixed(2)}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          vs normal ${anomaly.normalAmount.toFixed(2)}
-                        </span>
-                      </div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {anomaly.date}
-                      </span>
+                    <div className="mt-2 flex justify-between items-center text-sm">
+                      <span className="text-gray-500 dark:text-gray-400">{expense.date}</span>
                     </div>
                   </li>
                 ))}

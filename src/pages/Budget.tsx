@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
-import { addBudget, updateBudget, deleteBudget, Budget as BudgetType } from '../store/budgetSlice';
+import { Link } from 'react-router-dom';
+import { createBudget, editBudget, removeBudget, Budget as BudgetType } from '../store/budgetSlice';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit, Trash, X, AlertTriangle, Check } from 'lucide-react';
+import { Plus, MoreVertical, Edit, Trash, AlertTriangle, Check, X } from 'lucide-react';
 import Input from '../components/common/Input';
 
 const BudgetModal: React.FC<{
@@ -37,9 +38,9 @@ const BudgetModal: React.FC<{
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (budget) {
-      dispatch(updateBudget({ ...formData, id: budget.id } as BudgetType));
+      dispatch(editBudget({ ...formData, id: budget.id } as BudgetType) as any);
     } else {
-      dispatch(addBudget(formData));
+      dispatch(createBudget(formData) as any);
     }
     onClose();
   };
@@ -289,6 +290,7 @@ function getRandomColor() {
 const Budget: React.FC = () => {
   const dispatch = useDispatch();
   const { budgets } = useSelector((state: RootState) => state.budgets);
+  const { anomalies } = useSelector((state: RootState) => state.expenses);
   const { expenses } = useSelector((state: RootState) => state.expenses);
   const { user } = useSelector((state: RootState) => state.auth);
   
@@ -307,7 +309,7 @@ const Budget: React.FC = () => {
   
   const handleDeleteBudget = (id: string) => {
     if (confirm('Are you sure you want to delete this budget?')) {
-      dispatch(deleteBudget(id));
+      dispatch(removeBudget(id) as any);
     }
   };
   
@@ -348,6 +350,12 @@ const Budget: React.FC = () => {
           <p className="mt-1 text-gray-600 dark:text-gray-400">
             Set and manage your budget limits
           </p>
+          {anomalies.length > 0 && (
+            <Link to="/dashboard" className="flex items-center mt-2 text-error-600 dark:text-error-400 text-sm font-medium">
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              {anomalies.length} {anomalies.length === 1 ? 'anomaly' : 'anomalies'} detected
+            </Link>
+          )}
         </div>
         <Button
           variant="primary"

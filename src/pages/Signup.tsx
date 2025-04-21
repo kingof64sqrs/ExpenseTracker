@@ -6,7 +6,7 @@ import { AtSign, Lock, User, TrendingUp } from 'lucide-react';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import ThemeToggle from '../components/common/ThemeToggle';
-import { autoLogin } from '../store/authSlice';
+import { loginSuccess } from '../store/authSlice';
 
 const Signup: React.FC = () => {
   const dispatch = useDispatch();
@@ -31,26 +31,48 @@ const Signup: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
+  
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       setLoading(false);
       return;
     }
-
+  
     try {
-      // Simulate signup delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      // For the demo, we'll just use mock login
-      dispatch(autoLogin());
-      navigate('/');
-    } catch (err) {
-      setError('Failed to create account');
+      const response = await fetch('http://localhost:5000/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        throw new Error(data.message || 'Signup failed');
+      }
+  
+      // If the API returns user data and token directly, log in the user
+      if (data.token && data.user) {
+        dispatch(loginSuccess({
+          user: data.user,
+          token: data.token
+        }));
+        navigate('/');
+      } else {
+        // Otherwise navigate to login page
+        navigate('/login');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }
   };
+  
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">

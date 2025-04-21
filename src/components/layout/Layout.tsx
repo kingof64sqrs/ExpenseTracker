@@ -1,21 +1,30 @@
 import React, { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../../store';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { autoLogin } from '../../store/authSlice';
-import { loadMockData as loadExpenseMockData } from '../../store/expenseSlice';
-import { loadMockData as loadBudgetMockData } from '../../store/budgetSlice';
+import Footer from './Footer';
+import { fetchUserProfile } from '../../store/authSlice';
+import { fetchExpenses } from '../../store/expenseSlice';
+import { fetchBudgets } from '../../store/budgetSlice';
 
 const Layout: React.FC = () => {
   const dispatch = useDispatch();
+  const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   
-  // Auto login and load mock data for demonstration purposes
+  // Load user profile data
   useEffect(() => {
-    dispatch(autoLogin());
-    dispatch(loadExpenseMockData());
-    dispatch(loadBudgetMockData());
+    dispatch(fetchUserProfile() as any);
   }, [dispatch]);
+  
+  // Load user's expenses and budgets when authenticated
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      dispatch(fetchExpenses(user.id) as any);
+      dispatch(fetchBudgets(user.id) as any);
+    }
+  }, [dispatch, isAuthenticated, user?.id]);
   
   return (
     <div className="flex h-screen overflow-hidden">
@@ -27,6 +36,7 @@ const Layout: React.FC = () => {
             <Outlet />
           </div>
         </main>
+        <Footer />
       </div>
     </div>
   );

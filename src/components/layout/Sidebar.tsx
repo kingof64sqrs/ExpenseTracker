@@ -7,7 +7,8 @@ import {
   PieChart, 
   User,
   LogOut,
-  TrendingUp
+  TrendingUp,
+  AlertTriangle
 } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import { logout } from '../../store/authSlice';
@@ -72,6 +73,12 @@ const Sidebar: React.FC = () => {
           icon={<PieChart size={20} />}
           label="Budget"
           active={location.pathname === '/budget'}
+        />
+        <SidebarLink
+          to="/anomalies"
+          icon={<AlertTriangle size={20} />}
+          label="Anomalies"
+          active={location.pathname === '/anomalies'}
         />
         <SidebarLink
           to="/profile"

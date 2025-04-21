@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../store';
-import { addExpense, deleteExpense, updateExpense, Expense } from '../store/expenseSlice';
+import { AnomalyAlert } from '../utils/anomalyDetection';
+import { deleteExpense, updateExpense, Expense, fetchExpenses } from '../store/expenseSlice';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, CreditCard, Filter, Search, Trash, Edit, Plus, X } from 'lucide-react';
+import { Calendar, CreditCard, Filter, Search, Trash, Edit, Plus, X, AlertTriangle } from 'lucide-react';
 import Input from '../components/common/Input';
+import axios from 'axios';
 
 const ExpenseModal: React.FC<{
   isOpen: boolean;
@@ -36,14 +38,35 @@ const ExpenseModal: React.FC<{
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (expense) {
-      dispatch(updateExpense({ ...formData, id: expense.id } as Expense));
-    } else {
-      dispatch(addExpense(formData));
+    try {
+      if (expense?._id) {
+        // Update existing expense
+        const response = await axios.put(`/api/expenses/${expense._id}`, {
+          ...formData,
+          userId: user?.id
+        });
+        dispatch(updateExpense(response.data));
+        // Fetch all expenses after update
+        if (user?.id) {
+          dispatch(fetchExpenses(user.id));
+        }
+      } else {
+        // Add new expense
+        const response = await axios.post('/api/expenses', {
+          ...formData,
+          userId: user?.id
+        });
+        if (user?.id) {
+          dispatch(fetchExpenses(user.id));
+        }
+      }
+      onClose();
+    } catch (error) {
+      console.error('Failed to save expense:', error);
+      alert('Failed to save expense. Please try again.');
     }
-    onClose();
   };
 
   const modalVariants = {
@@ -216,15 +239,20 @@ const ExpenseItem: React.FC<{
   expense: Expense;
   onEdit: (expense: Expense) => void;
   onDelete: (id: string) => void;
-}> = ({ expense, onEdit, onDelete }) => {
+  isAnomaly?: boolean;
+  anomalyDetails?: AnomalyAlert;
+}> = ({ expense, onEdit, onDelete, isAnomaly, anomalyDetails }) => {
   const { user } = useSelector((state: RootState) => state.auth);
+  
+  // Use either the passed isAnomaly prop or the expense's own isAnomaly property
+  const showAsAnomaly = isAnomaly || expense.isAnomaly;
   
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-      className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden"
+      className={`${showAsAnomaly ? 'bg-error-50 dark:bg-error-900/20 border-error-200 dark:border-error-800' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'} rounded-lg shadow-sm border overflow-hidden`}
     >
       <div className="p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
@@ -233,8 +261,24 @@ const ExpenseItem: React.FC<{
               {getCategoryIcon(expense.category)}
             </div>
             <div>
-              <h3 className="font-medium text-gray-900 dark:text-white">{expense.description}</h3>
+              <div className="flex items-center">
+                <h3 className="font-medium text-gray-900 dark:text-white">{expense.description}</h3>
+                {showAsAnomaly && (
+                  <div className="ml-2 flex items-center">
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-error-100 dark:bg-error-800 text-error-800 dark:text-error-200">
+                      <AlertTriangle className="h-3 w-3 inline mr-1" />
+                      Anomaly
+                    </span>
+                  </div>
+                )}
+              </div>
               <p className="text-sm text-gray-500 dark:text-gray-400">{expense.category}</p>
+              {showAsAnomaly && expense.anomalyReason && (
+                <p className="text-xs text-error-600 dark:text-error-400 mt-1">
+                  <AlertTriangle className="h-3 w-3 inline mr-1" />
+                  {expense.anomalyReason}
+                </p>
+              )}
               <div className="flex items-center mt-1 space-x-2">
                 <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
                   <Calendar className="h-3 w-3 mr-1" />
@@ -253,18 +297,25 @@ const ExpenseItem: React.FC<{
             </div>
           </div>
           <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto mt-4 sm:mt-0">
-            <span className="text-lg font-semibold text-gray-900 dark:text-white mr-4">
-              {user?.currency || '$'}{expense.amount.toFixed(2)}
-            </span>
+            <div className="flex flex-col items-end mr-4">
+              <span className={`text-lg font-semibold ${isAnomaly ? 'text-error-600 dark:text-error-400' : 'text-gray-900 dark:text-white'}`}>
+                {user?.currency || '$'}{expense.amount.toFixed(2)}
+              </span>
+              {isAnomaly && anomalyDetails && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  vs normal {user?.currency || '$'}{anomalyDetails.normalAmount.toFixed(2)}
+                </span>
+              )}
+            </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => onEdit(expense)}
+                onClick={() => onEdit(expense)} // Pass the entire expense object
                 className="p-1.5 text-gray-500 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-400"
               >
                 <Edit className="h-4 w-4" />
               </button>
               <button
-                onClick={() => onDelete(expense.id)}
+                onClick={() => onDelete(expense._id)} // Use _id instead of id
                 className="p-1.5 text-gray-500 hover:text-error-600 dark:text-gray-400 dark:hover:text-error-400"
               >
                 <Trash className="h-4 w-4" />
@@ -310,8 +361,15 @@ function getCategoryIcon(category: string) {
 
 const Expenses: React.FC = () => {
   const dispatch = useDispatch();
-  const { expenses } = useSelector((state: RootState) => state.expenses);
+  const { expenses, anomalies } = useSelector((state: RootState) => state.expenses);
   const { user } = useSelector((state: RootState) => state.auth);
+
+  // Fetch expenses when component mounts and user is available
+  useEffect(() => {
+    if (user?.id) {
+      dispatch(fetchExpenses(user.id));
+    }
+  }, [dispatch, user?.id]); // Added user?.id as dependency
   
   const [modalOpen, setModalOpen] = useState(false);
   const [currentExpense, setCurrentExpense] = useState<Expense | undefined>(undefined);
@@ -330,13 +388,52 @@ const Expenses: React.FC = () => {
   };
   
   const handleEditExpense = (expense: Expense) => {
-    setCurrentExpense(expense);
-    setModalOpen(true);
+    try {
+      // Validate the MongoDB ObjectId format
+      if (!expense._id || typeof expense._id !== 'string' || expense._id.length !== 24) {
+        throw new Error('Invalid expense ID format');
+      }
+  
+      // Find the expense in the current state to verify it exists
+      const expenseToEdit = expenses.find(exp => exp._id === expense._id);
+      if (!expenseToEdit) {
+        throw new Error('Expense not found');
+      }
+  
+      setCurrentExpense(expenseToEdit);
+      setModalOpen(true);
+    } catch (error: any) {
+      console.error('Failed to edit expense:', error);
+      alert(error.message || 'Failed to edit expense. Please try again.');
+    }
   };
   
-  const handleDeleteExpense = (id: string) => {
-    if (confirm('Are you sure you want to delete this expense?')) {
-      dispatch(deleteExpense(id));
+  const handleDeleteExpense = async (id: string) => {
+    try {
+      // Validate the MongoDB ObjectId format (24 characters)
+      if (!id || typeof id !== 'string' || id.length !== 24) {
+        throw new Error('Invalid expense ID format');
+      }
+  
+      // Find the expense in the current state to verify it exists
+      const expenseToDelete = expenses.find(exp => exp._id === id);
+      if (!expenseToDelete) {
+        throw new Error('Expense not found');
+      }
+  
+      if (window.confirm('Are you sure you want to delete this expense?')) {
+        const result = await dispatch(deleteExpense(id)).unwrap();
+        
+        if (result) {
+          alert('Expense deleted successfully');
+          if (user?.id) {
+            dispatch(fetchExpenses(user.id));
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to delete expense:', error);
+      alert(error.message || 'Failed to delete expense. Please try again.');
     }
   };
   
@@ -352,6 +449,9 @@ const Expenses: React.FC = () => {
     setPaymentMethodFilter('');
   };
   
+  // Count anomalies for display
+  const anomalyCount = expenses.filter(exp => exp.isAnomaly).length;
+
   // Filter expenses
   const filteredExpenses = expenses.filter((expense) => {
     // Search term filter
@@ -384,6 +484,16 @@ const Expenses: React.FC = () => {
     return true;
   });
   
+  // Sort expenses to show anomalies first
+  filteredExpenses.sort((a, b) => {
+    // First sort by anomaly status (anomalies first)
+    if (a.isAnomaly && !b.isAnomaly) return -1;
+    if (!a.isAnomaly && b.isAnomaly) return 1;
+    
+    // Then sort by date (newest first)
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+  
   // Get unique payment methods
   const uniquePaymentMethods = Array.from(new Set(expenses.map((e) => e.paymentMethod)));
   
@@ -395,6 +505,14 @@ const Expenses: React.FC = () => {
           <p className="mt-1 text-gray-600 dark:text-gray-400">
             Track and manage your expenses
           </p>
+          {anomalyCount > 0 && (
+            <div className="flex items-center mt-2">
+              <span className="px-2 py-1 text-xs font-medium bg-error-100 dark:bg-error-800 text-error-800 dark:text-error-200 rounded-full flex items-center">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                {anomalyCount} {anomalyCount === 1 ? 'anomaly' : 'anomalies'} detected
+              </span>
+            </div>
+          )}
         </div>
         <Button
           variant="primary"
@@ -509,14 +627,21 @@ const Expenses: React.FC = () => {
       <div className="space-y-4">
         <AnimatePresence>
           {filteredExpenses.length > 0 ? (
-            filteredExpenses.map((expense) => (
-              <ExpenseItem
-                key={expense.id}
-                expense={expense}
-                onEdit={handleEditExpense}
-                onDelete={handleDeleteExpense}
-              />
-            ))
+            filteredExpenses.map((expense) => {
+              const anomaly = anomalies.find(a => a.id === `anomaly-${expense._id}`);
+              const isAnomaly = !!anomaly;
+              
+              return (
+                <ExpenseItem
+                  key={expense._id} // Use _id as key
+                  expense={expense}
+                  onEdit={(exp) => handleEditExpense(exp)} // Pass the entire expense object
+                  onDelete={() => handleDeleteExpense(expense._id)} // Use _id for deletion
+                  isAnomaly={isAnomaly}
+                  anomalyDetails={anomaly}
+                />
+              );
+            })
           ) : (
             <motion.div
               initial={{ opacity: 0 }}

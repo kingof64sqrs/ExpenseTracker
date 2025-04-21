@@ -1,4 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import axios from 'axios';
 
 export interface Budget {
   id: string;
@@ -10,13 +11,11 @@ export interface Budget {
 }
 
 export interface BudgetRecommendation {
-  id: string;
+  id?: string;
   category: string;
-  currentBudget: number;
-  recommendedBudget: number;
-  reason: string;
-  impact: 'increase' | 'decrease' | 'maintain';
-  confidence: number;
+  percentage?: number;
+  message: string;
+  isPositive?: boolean;
 }
 
 export interface AnomalyAlert {
@@ -44,6 +43,93 @@ const initialState: BudgetState = {
   recommendations: [],
   anomalies: [],
 };
+
+// Async thunk for fetching budgets
+export const fetchBudgets = createAsyncThunk(
+  'budgets/fetchBudgets',
+  async (userId: string, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return rejectWithValue('No authentication token found');
+      }
+
+      const response = await axios.get(`/api/budgets/user/${userId}`, {
+        headers: {
+          'x-auth-token': token
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch budgets');
+    }
+  }
+);
+
+export const createBudget = createAsyncThunk(
+  'budgets/createBudget',
+  async (budgetData: Omit<Budget, 'id'>, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return rejectWithValue('No authentication token found');
+      }
+
+      const response = await axios.post('/api/budgets', budgetData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to create budget');
+    }
+  }
+);
+
+export const editBudget = createAsyncThunk(
+  'budgets/editBudget',
+  async (budget: Budget, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return rejectWithValue('No authentication token found');
+      }
+
+      const response = await axios.put(`/api/budgets/${budget.id}`, budget, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-token': token
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update budget');
+    }
+  }
+);
+
+export const removeBudget = createAsyncThunk(
+  'budgets/removeBudget',
+  async (id: string, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return rejectWithValue('No authentication token found');
+      }
+
+      await axios.delete(`/api/budgets/${id}`, {
+        headers: {
+          'x-auth-token': token
+        }
+      });
+      return id;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to delete budget');
+    }
+  }
+);
 
 // Mock data for frontend demo
 const mockBudgets: Budget[] = [
@@ -93,20 +179,23 @@ const mockRecommendations: BudgetRecommendation[] = [
   {
     id: '1',
     category: 'Food',
-    currentBudget: 500,
-    recommendedBudget: 450,
-    reason: 'Based on your last 3 months of spending, you could reduce your food budget by $50.',
-    impact: 'decrease',
-    confidence: 0.85,
+    percentage: 10,
+    message: "You're overspending on Food. Reduce it by 10% to stay within your ₹5000 budget.",
+    isPositive: false,
   },
   {
     id: '2',
     category: 'Transport',
-    currentBudget: 200,
-    recommendedBudget: 250,
-    reason: 'Your transportation costs have increased by 25% in the last month.',
-    impact: 'increase',
-    confidence: 0.72,
+    percentage: 25,
+    message: "You're overspending on Transport. Reduce it by 25% to stay within your ₹2000 budget.",
+    isPositive: false,
+  },
+  {
+    id: '3',
+    category: 'Overall',
+    percentage: 0,
+    message: "You did a fantastic job with your budget this month!",
+    isPositive: true,
   },
 ];
 
@@ -147,7 +236,9 @@ const budgetSlice = createSlice({
       state.loading = false;
       state.error = action.payload;
     },
+    // Local budget actions (these will be replaced with API calls)
     addBudget: (state, action: PayloadAction<Omit<Budget, 'id'>>) => {
+      // This is now just a fallback - we should use createBudget thunk instead
       const newBudget = {
         ...action.payload,
         id: Date.now().toString(),
@@ -175,6 +266,66 @@ const budgetSlice = createSlice({
       state.recommendations = mockRecommendations;
       state.anomalies = mockAnomalies;
     },
+  },
+  extraReducers: (builder) => {
+    // Handle fetchBudgets
+    builder.addCase(fetchBudgets.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(fetchBudgets.fulfilled, (state, action) => {
+      state.loading = false;
+      state.budgets = action.payload;
+    });
+    builder.addCase(fetchBudgets.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+    
+    // Handle createBudget
+    builder.addCase(createBudget.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(createBudget.fulfilled, (state, action) => {
+      state.loading = false;
+      state.budgets.push(action.payload);
+    });
+    builder.addCase(createBudget.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+    
+    // Handle editBudget
+    builder.addCase(editBudget.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(editBudget.fulfilled, (state, action) => {
+      state.loading = false;
+      const index = state.budgets.findIndex(b => b.id === action.payload.id);
+      if (index !== -1) {
+        state.budgets[index] = action.payload;
+      }
+    });
+    builder.addCase(editBudget.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+    
+    // Handle removeBudget
+    builder.addCase(removeBudget.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(removeBudget.fulfilled, (state, action) => {
+      state.loading = false;
+      state.budgets = state.budgets.filter(b => b.id !== action.payload);
+    });
+    builder.addCase(removeBudget.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
   },
 });
 

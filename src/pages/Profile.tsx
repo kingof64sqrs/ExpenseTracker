@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
 import { Camera, Check, Save, User, X } from 'lucide-react';
@@ -6,7 +6,7 @@ import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
 import { RootState } from '../store';
-import { updateUser } from '../store/authSlice';
+import { fetchUserProfile, updateUserProfile } from '../store/authSlice';
 
 const currencyOptions = [
   { value: 'INR', label: 'INR (₹)' },
@@ -55,17 +55,34 @@ const CategoryPill: React.FC<{
 
 const Profile: React.FC = () => {
   const dispatch = useDispatch();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, loading, error } = useSelector((state: RootState) => state.auth);
   
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    currency: user?.currency || 'USD',
+    currency: user?.currency || 'INR',
   });
   
   const [newCategory, setNewCategory] = useState('');
   const [categories, setCategories] = useState<string[]>(user?.preferredCategories || []);
   const [success, setSuccess] = useState(false);
+  
+  // Fetch user profile data when component mounts
+  useEffect(() => {
+    dispatch(fetchUserProfile() as any);
+  }, [dispatch]);
+  
+  // Update form data when user data changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        currency: user.currency || 'INR',
+      });
+      setCategories(user.preferredCategories || []);
+    }
+  }, [user]);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -88,17 +105,35 @@ const Profile: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    dispatch(updateUser({
+    dispatch(updateUserProfile({
       ...formData,
       preferredCategories: categories,
-    }));
+    }) as any);
     
     setSuccess(true);
     setTimeout(() => setSuccess(false), 3000);
   };
   
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="text-center p-6 bg-red-100 text-red-700 rounded-lg max-w-3xl mx-auto mt-8">
+        <p className="text-lg font-semibold mb-2">Authentication Error</p>
+        <p>{error}</p>
+        <p className="mt-4 text-sm">Please log in to view your profile.</p>
+      </div>
+    );
+  }
+  
   if (!user) {
-    return <div>Loading...</div>;
+    return <div>No user data available. Please log in.</div>;
   }
   
   return (
@@ -130,7 +165,12 @@ const Profile: React.FC = () => {
             <div className="mt-6 w-full">
               <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
                 <span className="text-sm text-gray-600 dark:text-gray-400">Member Since</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">March 2023</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  {user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {
+                    month: 'long',
+                    year: 'numeric'
+                  }) : 'N/A'}
+                </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
                 <span className="text-sm text-gray-600 dark:text-gray-400">Currency</span>
