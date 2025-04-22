@@ -2,7 +2,7 @@
 
 A modern expense tracking application with AI-powered budgeting recommendations and anomaly detection.
 
-DEMO - https://youtu.be/5x4_1oE66OA
+DEMO - [https://youtu.be/5x4_1oE66OA](https://youtu.be/_5JFAkPTsTU)
 
 ## AI TOOLS , TECH STACK USED : 
 
